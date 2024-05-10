@@ -22,8 +22,18 @@ class TVSettings(BaseSettings):
         env_file = '.env'
         extra = Extra.ignore
 
+class Paths(BaseSettings):
+    STRATEGY_DATAFRAME_PATH : str = Field(..., env = 'STRATEGY_DATAFRAME_PATH')
+    class Config:
+        env_file = '.env'
+        extra = Extra.ignore
+
+
 def get_samco_settings():
     return SamcoSettings()
 
 def get_tv_settings():
     return TVSettings()
+
+def get_paths():
+    return Paths()

@@ -1,90 +1,114 @@
-import time
 import os
+import time
+import json
 import pandas as pd
 from datetime import datetime
 from typing import List
-from interface import Strategy, TradeAuthorization, TradeDataExtracion
+from interface import Strategy, TradeAuthorization, TradeDataExtracion, Scanner
 from pydantic import BaseModel, field_validator
 from utils import download_fno_symbols
 from sessions import samco_session
+from config import get_paths
 from tradeAppData import SamcoTradeDataExtraction
 
+class shotGainScanner(Scanner):
+    def __init__(self, session: TradeAuthorization):
+        self.session = session
+        self.performed = False
+        self.data = []
+        self.data_path = self._data_path()
 
-def samco_short_gain_strategy_scanner(session:TradeAuthorization):
-    '''
-    Function to be run everyday at 9:15am.
-    This function takes time to run and speed is bound by the samco server limits.
-    Multiprocessing can not be done unless using multiple accounts.
-
-    '''
-    data = []
-    fno_symbols = download_fno_symbols()
-    print(fno_symbols)
-
-    for symbol in fno_symbols:
-        time.sleep(4)
-        samco_trade_data = SamcoTradeDataExtraction(symbol, session)
-        response = samco_trade_data.get_quote()
-        open_value = float(response['openValue'])
-        previous_close = float(response['previousClose'])
-        print('Symbol: ', symbol, 'openValue: ', open_value, 'prevClose: ',previous_close)
-        diff = (previous_close - open_value) / previous_close
-        data.append([symbol, open_value, previous_close, diff])
-
-    return data
-
-def save_short_gain_dataframe(data:List[List])->pd.DataFrame:
-
-    temp_data = pd.DataFrame(data, columns=['symbol', 'openValue', 'previousClose', 'diff'])
-    temp_data['rank'] = temp_data['diff'].rank()
-    temp_data_sorted = temp_data.sort_values(by='rank', ascending=True)
-    top_upside = temp_data_sorted.iloc[:5]
-    top_downside = temp_data_sorted.iloc[-5:]
-    print(top_upside)
-    print(top_downside)
-    print(os.path.dirname(os.getcwd()))
-    temp_data_sorted.to_csv('results.csv')
-    top_upside.to_csv('top_upside.csv')
-    top_downside.to_csv('top_downside.csv')
-    return top_upside, top_downside
+    def _data_path(self):
+        file_path = os.path.abspath(__file__)
+        file_name = os.path.basename(file_path)
+        paths = get_paths()
+        data_path = os.path.join(paths.STRATEGY_DATAFRAME_PATH, file_name[:-3])
+        return data_path
+    
+    def __check_data_existence(self):
+        '''
+        Check if any existing data is present.
+        Return True, if data is present.
+        '''
+        folder_content = os.listdir(self.data_path)
+        if len(folder_content) != 0:
+            return True
+        else:
+            return False
         
+    def __clean_data_path(self):
+        if self.__check_data_existence():
+            files = os.listdir(self.data_path)
+            for file in files:
+                file_path = os.path.join(self.data_path, file)
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Failed to delete {file_path}: {e}")
 
+    def _data_scanner(self):
+        '''
+        This function takes time to run and speed is bound by the samco server limits.
+        Multiprocessing can not be done unless using multiple accounts.
+        '''
+        fno_symbols = download_fno_symbols()
+
+        for symbol in fno_symbols:
+            time.sleep(0.1)
+            response = self.session.session.get_quote(symbol)
+            response = json.loads(response)
+            if response['status'] == 'Success':
+                open_value = float(response['openValue'])
+                previous_close = float(response['previousClose'])
+                print('Symbol: ', symbol, 'openValue: ', open_value, 'prevClose: ',previous_close)
+                diff = (previous_close - open_value) / previous_close
+                self.data.append([symbol, open_value, previous_close, diff])
+        return self.data
+
+    def __short_gain_dataframe(self)->pd.DataFrame:
+        self.data = self._data_scanner()
+        temp_data = pd.DataFrame(self.data, columns=['symbol', 'openValue', 'previousClose', 'diff'])
+        temp_data['rank'] = temp_data['diff'].rank()
+        temp_data_sorted = temp_data.sort_values(by='rank', ascending=True)
+        top_upside = temp_data_sorted.iloc[:5]
+        top_downside = temp_data_sorted.iloc[-5:]
+        return temp_data_sorted, top_upside, top_downside
+    
+    def __save_short_gain_dataframe(self)->pd.DataFrame:
+        self.__clean_data_path()
+        temp_data_sorted, top_upside, top_downside = self.__short_gain_dataframe()
+        try:
+            temp_data_sorted.to_csv(os.path.join(self.data_path, 'sorted_result.csv'))
+            top_upside.to_csv(os.path.join(self.data_path, 'top_upside.csv'))
+            top_downside.to_csv(os.path.join(self.data_path, 'top_downside.csv'))
+        except Exception as e:
+            print(f'Unable to save shotGainStrategy csv files in: {self.data_path}')
+    
+    def strategy_scanner(self):
+        '''
+        performs the scanning if not done.
+        '''
+        if self.performed == False:
+            self.__save_short_gain_dataframe()
+            self.performed = True
+            
 class ShortGainStrategy(Strategy):
 
     def __init__(self,
                  trade_data:TradeDataExtracion,
+                 symbol: str,
                  session: TradeAuthorization = samco_session()
                  ):
         self.session = session
-        self.symbol = None
+        self.symbol = symbol
         self.active = False
         self.trade_data = trade_data
         self.fno_symbols = download_fno_symbols() 
         # later this should be shrinked to only a few symbols depending on performance and 
         # number of trade opportunity
 
-    def __find_top_gainers_and_loosers(self, value):
-        future_symbol = self.trade_data.earliest_month
-
     def scan_opporunity(self):
         print(self.trade_data.extract_ltp())
-        # for item in sym_list:
-        #     count += 1
-        #     print("Data of ",item," ",count," of ",len(sym_list))
-        #     sym = str(item)  +"24MAYFUT"
-        #     sym1=sym.upper()
-        #     sym = item.replace("&","_").replace("-","_")
-        #     temp,ltp = s_quote(sym1,token,exh="NFO")
-        #     if temp['status']=='Success':
-        #         op = float(temp['openValue'])
-        #         pc = float(temp['previousClose'])
-        #         print("OP :",op,"PC: ",pc)
-        #         diff = (pc - op) / pc
-        #         #print(sym,op,pc,diff)
-        #         temp = (sym,op,pc,diff)
-        #         data.append(temp)
-        #     else:
-        #         print(sym1," gave an Error : ",temp['statusMessage'])
         
 
     def entry_price(self):

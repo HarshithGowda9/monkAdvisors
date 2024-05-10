@@ -22,7 +22,6 @@ class Session(TradeAuthorization):
     @abstractmethod
     def is_authenticated(self):
         pass
-
 class TradeDataExtracion(ABC):
     @abstractmethod
     def extract_trading_symbol(self):
@@ -60,6 +59,15 @@ class TradeDataExtracion(ABC):
         pass
 
 # STRATEGY INTERFACE
+
+class Scanner(ABC):
+    '''
+    Support class to Strategy.scan_opportunity() method.
+    Class to be run everyday at 9:15am.
+    '''
+    @abstractmethod
+    def strategy_scanner(self):
+        pass
 
 class Strategy(ABC):
 

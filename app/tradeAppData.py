@@ -18,18 +18,19 @@ from interface import TradeDataExtracion, TradeAuthorization
 class SamcoTradeDataExtraction(TradeDataExtracion):
     def __init__(self,
                  symbol: str,
-                 session: TradeAuthorization, 
+                 session: TradeAuthorization,
+                 earliest_month: str,
                  days: int = 4
                  ):
         self.samco = session
         self.symbol = symbol
         self.days = days
+        self.earliest_month = earliest_month
         self.today = datetime.datetime.now()
         self.from_date = self.today - datetime.timedelta(days=self.days)
         self.today = self.today.strftime("%Y-%m-%d %H:%M:%S")
         self.from_date = self.from_date.strftime("%Y-%m-%d %H:%M:%S")
         self.equity_derivatives_df = self.__extract_equity_derivatives_df()
-        self.earliest_month = self.__extract_earliest_month_for_futures_contract()
         self.interval = None
 
     def __extract_equity_derivatives_df(self)->pd.DataFrame:
@@ -45,20 +46,6 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
                 raise RequestError(message=f'Request not succeed. Returned {response.status}')
         else:
             raise TradeAuthenticationFailedError(message = f'Trade App Authorization failed for {self.samco.session}')
-        
-    def __extract_earliest_month_for_futures_contract(self)->Tuple[pd.DataFrame, str]:
-        '''
-        Filters the futures (FUTSTK) data. Extract the earliest month.
-        '''
-        futures_trading_symbols = self.equity_derivatives_df.loc[self.equity_derivatives_df.instrument == 'FUTSTK', 'tradingSymbol']
-        print(futures_trading_symbols)
-        futures_month_list = [str(ts)[len(self.symbol)+2:len(self.symbol)+5] for ts in futures_trading_symbols]
-        earliest_month = find_earliest_month(futures_month_list)
-        self.earliest_month = earliest_month
-        if len(self.earliest_month) == 3:
-            return earliest_month
-        else: 
-            raise ValueError('Legth of month should be 3. ex: MAY')
     
     def __extract_strike_prices(self)->Tuple[List[int], List[int]]:
         trading_symbols_ce = self.equity_derivatives_df.tradingSymbol.loc[self.equity_derivatives_df.tradingSymbol.str.contains(self.earliest_month) &
