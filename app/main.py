@@ -15,5 +15,5 @@ if __name__ == '__main__':
     earliest_month = earliest_month.earliest_month
 
     # Initiate shortGainStrategy
-    shot_gain_scanner = shotGainScanner(samco_session)
+    shot_gain_scanner = shotGainScanner(samco_session, earliest_month)
     shot_gain_scanner.strategy_scanner()

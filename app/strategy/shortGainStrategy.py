@@ -12,8 +12,12 @@ from config import get_paths
 from tradeAppData import SamcoTradeDataExtraction
 
 class shotGainScanner(Scanner):
-    def __init__(self, session: TradeAuthorization):
+    def __init__(self, 
+                 session: TradeAuthorization,
+                 earliest_month: str
+                 ):
         self.session = session
+        self.earliest_month = earliest_month
         self.performed = False
         self.data = []
         self.data_path = self._data_path()
@@ -55,6 +59,8 @@ class shotGainScanner(Scanner):
 
         for symbol in fno_symbols:
             time.sleep(0.1)
+            symbol = f'{symbol}{datetime.now().strftime("%y")}{self.earliest_month}FUT'
+            print(symbol)
             response = self.session.session.get_quote(symbol)
             response = json.loads(response)
             if response['status'] == 'Success':
@@ -93,23 +99,22 @@ class shotGainScanner(Scanner):
             self.performed = True
             
 class ShortGainStrategy(Strategy):
-
     def __init__(self,
+                 session: TradeAuthorization,
                  trade_data:TradeDataExtracion,
-                 symbol: str,
-                 session: TradeAuthorization = samco_session()
+                 scanner: Scanner,
+                 symbol: str
                  ):
         self.session = session
-        self.symbol = symbol
-        self.active = False
         self.trade_data = trade_data
-        self.fno_symbols = download_fno_symbols() 
-        # later this should be shrinked to only a few symbols depending on performance and 
-        # number of trade opportunity
+        self.scanner = scanner
+        self.symbol = symbol
+        self.active = False 
 
     def scan_opporunity(self):
-        print(self.trade_data.extract_ltp())
-        
+        if self.scanner.performed == False:
+            print('Downloading upside and downside data.')
+            self.scanner.strategy_scanner()
 
     def entry_price(self):
         return super().entry_price()

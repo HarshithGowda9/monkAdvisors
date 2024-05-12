@@ -2,16 +2,14 @@
 Trading App Data if a data extraction and Order API class.
 The API can place order..
 '''
-import time
 import json
+import time
 import datetime
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from urllib.error import HTTPError
-from tradeAppLogin import SamcoSession
-from config import get_samco_settings
 from error import RequestError, TradeAuthenticationFailedError, StrikePriceIntervalError
-from utils import find_earliest_month
+from utils import EarliestMonth
 from sessions import samco_session
 from interface import TradeDataExtracion, TradeAuthorization
 
@@ -20,7 +18,7 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
                  symbol: str,
                  session: TradeAuthorization,
                  earliest_month: str,
-                 days: int = 4
+                 days: int = 30
                  ):
         self.samco = session
         self.symbol = symbol
@@ -30,7 +28,6 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
         self.from_date = self.today - datetime.timedelta(days=self.days)
         self.today = self.today.strftime("%Y-%m-%d %H:%M:%S")
         self.from_date = self.from_date.strftime("%Y-%m-%d %H:%M:%S")
-        self.equity_derivatives_df = self.__extract_equity_derivatives_df()
         self.interval = None
 
     def __extract_equity_derivatives_df(self)->pd.DataFrame:
@@ -48,6 +45,7 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
             raise TradeAuthenticationFailedError(message = f'Trade App Authorization failed for {self.samco.session}')
     
     def __extract_strike_prices(self)->Tuple[List[int], List[int]]:
+        self.equity_derivatives_df = self.__extract_equity_derivatives_df()
         trading_symbols_ce = self.equity_derivatives_df.tradingSymbol.loc[self.equity_derivatives_df.tradingSymbol.str.contains(self.earliest_month) &
                                                                           self.equity_derivatives_df.tradingSymbol.str.contains('CE')].tolist()
         trading_symbols_pe = self.equity_derivatives_df.tradingSymbol.loc[self.equity_derivatives_df.tradingSymbol.str.contains(self.earliest_month) &
@@ -91,47 +89,57 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
         return trading_symbol
 
     def extract_history(self):
+        '''
+        Daily data extraction for given days.
+        '''
         if self.samco.is_authenticated() == True:
-            response = self.samco.session.get_historical_candle_data(symbol_name='INFY24MAY1440CE',
+            history_symbol = f'{self.symbol}{datetime.datetime.now().strftime("%y")}{self.earliest_month}FUT'
+            response = self.samco.session.get_historical_candle_data(symbol_name=history_symbol,
                                                                      exchange=self.samco.session.EXCHANGE_NFO, 
                                                                      from_date=datetime.datetime.strptime(
                                                                          self.from_date, "%Y-%m-%d %H:%M:%S").date().strftime("%Y-%m-%d"),
                                                                      to_date=datetime.datetime.strptime(
                                                                          self.today, "%Y-%m-%d %H:%M:%S").date().strftime("%Y-%m-%d"))
-            try:
-                response = json.loads(response)
-            except json.decoder.JSONDecodeError as e:
-                raise HTTPError(url='https://api.stocknote.com/history/candleData', code=429, msg="Too Many Requests", hdrs={}, fp=None)
-
-            if response['status'] == 'Success':
-                history_candle_data = response['historicalCandleData']
-                history_candle_data_df = pd.DataFrame(history_candle_data)
-                history_candle_data_df.date = pd.to_datetime(history_candle_data_df.date, format='%Y-%m-%d')
-                return history_candle_data_df
+            if '429 Too Many Requests' in response:
+                print('Response failed with Too Many request. Trying again to reconnect.')
+                time.sleep(2)
+                return self.extract_history()
             else:
-                raise RequestError(message=f'Request not succeed. Returned {response.status}')
+                response = json.loads(response)
+                if response['status'] == 'Success':
+                    print('Success!')
+                    history_candle_data = response['historicalCandleData']
+                    history_candle_data_df = pd.DataFrame(history_candle_data)
+                    history_candle_data_df.date = pd.to_datetime(history_candle_data_df.date, format='%Y-%m-%d')
+                    return history_candle_data_df
+                else:
+                    raise RequestError(message=f'Request not succeed. Returned {response.status}')
         else:
             raise TradeAuthenticationFailedError(message = f'Trade App Authorization failed for {self.samco.session}')
         
-        
     def extract_ohlc(self):
+        '''
+        1 min interval data.
+        '''
         if self.samco.is_authenticated() == True:
             response = self.samco.session.get_intraday_candle_data(symbol_name=self.symbol,
                                                   exchange=self.samco.session.EXCHANGE_NSE, 
                                                   from_date=self.from_date,
                                                   to_date=self.today)
-            try:
-                response = json.loads(response)
-            except json.decoder.JSONDecodeError as e:
-                raise HTTPError(url='https://api.stocknote.com/intraday/candleData', code=429, msg="Too Many Requests", hdrs={}, fp=None)
-
-            if response['status'] == 'Success':
-                candle_data = response['intradayCandleData']
-                candle_data_df = pd.DataFrame(candle_data)
-                candle_data_df.dateTime = pd.to_datetime(candle_data_df.dateTime, format='%Y-%m-%d %H:%M:%S.%f')
-                return candle_data_df
+            if '429 Too Many Requests' in response:
+                print('Response failed with Too Many request. Trying again to reconnect.')
+                time.sleep(2)
+                return self.extract_ohlc()
             else:
-                raise RequestError(message=f'Request not succeed. Returned {response.status}')
+                response = json.loads(response)
+                if response['status'] == 'Success':
+                    print('Success!')
+                    candle_data = response['intradayCandleData']
+                    candle_data_df = pd.DataFrame(candle_data)
+                    candle_data_df.dateTime = pd.to_datetime(candle_data_df.dateTime, format='%Y-%m-%d %H:%M:%S.%f')
+                    return candle_data_df
+                else:
+                    raise RequestError(message=f'Request not succeed. Returned {response.status}')
             
         else:
             raise TradeAuthenticationFailedError(message = f'Trade App Authorization failed for {self.samco.session}')
@@ -154,11 +162,11 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
 
 if __name__ == '__main__':
     samco_session = samco_session()
-    samco_trade = SamcoTradeDataExtraction(session=samco_session,
-                                           symbol='INFY',
-                                           days = 4)
-    print(samco_session.is_authenticated())
-    # print(samco_trade.extract_ohlc())
+    earliest_month = EarliestMonth(samco_session)
+    earliest_month = earliest_month.earliest_month
+    samco_trade = SamcoTradeDataExtraction('INFY', samco_session, earliest_month, days = 4)
+    
+    print(samco_trade.extract_ohlc())
     # print(samco_trade.extract_trading_symbol())
     # print(samco_trade.get_quote())
-    # print(samco_trade.extract_history())
+    print(samco_trade.extract_history())
