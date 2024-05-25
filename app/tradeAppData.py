@@ -18,7 +18,7 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
                  symbol: str,
                  session: TradeAuthorization,
                  earliest_month: str,
-                 days: int = 30
+                 days: int = 100
                  ):
         self.samco = session
         self.symbol = symbol
@@ -34,13 +34,18 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
         if self.samco.is_authenticated() == True:
             response = self.samco.session.search_equity_derivative(search_symbol_name=self.symbol,
                                                                          exchange=self.samco.session.EXCHANGE_NFO)
-            response = json.loads(response)
-            if response['status'] == 'Success':
-                equity_derivatives = response['searchResults']
-                equity_derivatives_df = pd.DataFrame(equity_derivatives)
-                return equity_derivatives_df
+            if '429 Too Many Requests' in response:
+                print('Response failed with Too Many request. Trying again to reconnect.')
+                time.sleep(2)
+                return self.__extract_equity_derivatives_df()
             else:
-                raise RequestError(message=f'Request not succeed. Returned {response.status}')
+                response = json.loads(response)
+                if response['status'] == 'Success': 
+                    equity_derivatives = response['searchResults']
+                    equity_derivatives_df = pd.DataFrame(equity_derivatives)
+                    return equity_derivatives_df
+                else:
+                    raise RequestError(message=f'Request not succeed. Returned {response.status}')
         else:
             raise TradeAuthenticationFailedError(message = f'Trade App Authorization failed for {self.samco.session}')
     
@@ -93,8 +98,7 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
         Daily data extraction for given days.
         '''
         if self.samco.is_authenticated() == True:
-            history_symbol = f'{self.symbol}{datetime.datetime.now().strftime("%y")}{self.earliest_month}FUT'
-            response = self.samco.session.get_historical_candle_data(symbol_name=history_symbol,
+            response = self.samco.session.get_historical_candle_data(symbol_name=self.symbol,
                                                                      exchange=self.samco.session.EXCHANGE_NFO, 
                                                                      from_date=datetime.datetime.strptime(
                                                                          self.from_date, "%Y-%m-%d %H:%M:%S").date().strftime("%Y-%m-%d"),
@@ -117,19 +121,21 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
         else:
             raise TradeAuthenticationFailedError(message = f'Trade App Authorization failed for {self.samco.session}')
         
-    def extract_ohlc(self):
+    def extract_ohlc(self, interval:str = '1'):
         '''
-        1 min interval data.
+        This method by default extract 1 min interval data.
         '''
         if self.samco.is_authenticated() == True:
+            self.from_date_ohlc = datetime.datetime.now() - datetime.timedelta(days=5)
+            self.from_date_ohlc = self.from_date_ohlc.strftime("%Y-%m-%d %H:%M:%S")
             response = self.samco.session.get_intraday_candle_data(symbol_name=self.symbol,
-                                                  exchange=self.samco.session.EXCHANGE_NSE, 
-                                                  from_date=self.from_date,
+                                                  exchange=self.samco.session.EXCHANGE_NFO, 
+                                                  from_date=self.from_date_ohlc,
                                                   to_date=self.today)
             if '429 Too Many Requests' in response:
                 print('Response failed with Too Many request. Trying again to reconnect.')
                 time.sleep(2)
-                return self.extract_ohlc()
+                return self.extract_ohlc(interval)
             else:
                 response = json.loads(response)
                 if response['status'] == 'Success':
@@ -137,7 +143,16 @@ class SamcoTradeDataExtraction(TradeDataExtracion):
                     candle_data = response['intradayCandleData']
                     candle_data_df = pd.DataFrame(candle_data)
                     candle_data_df.dateTime = pd.to_datetime(candle_data_df.dateTime, format='%Y-%m-%d %H:%M:%S.%f')
-                    return candle_data_df
+                    candle_data_df.set_index('dateTime', inplace=True)
+                    ohlc_dict = {
+                        'open': 'first',
+                        'high': 'max',
+                        'low': 'min',
+                        'close': 'last',
+                        'volume': 'last'
+                    }
+                    candle_data_df_agg = candle_data_df.resample(f'{interval}min').apply(ohlc_dict).dropna()
+                    return candle_data_df_agg
                 else:
                     raise RequestError(message=f'Request not succeed. Returned {response.status}')
             
@@ -164,9 +179,8 @@ if __name__ == '__main__':
     samco_session = samco_session()
     earliest_month = EarliestMonth(samco_session)
     earliest_month = earliest_month.earliest_month
-    samco_trade = SamcoTradeDataExtraction('INFY', samco_session, earliest_month, days = 4)
-    
-    print(samco_trade.extract_ohlc())
+    samco_trade = SamcoTradeDataExtraction('INFY', samco_session, earliest_month, days = 30)
+    # print(samco_trade.extract_ohlc('15'))
     # print(samco_trade.extract_trading_symbol())
-    # print(samco_trade.get_quote())
-    print(samco_trade.extract_history())
+    print(samco_trade.get_quote())
+    # print(samco_trade.extract_history())

@@ -69,6 +69,15 @@ class Scanner(ABC):
     def strategy_scanner(self):
         pass
 
+class Calculation(ABC):
+    '''
+    Intermediate class between Scanner and Strategy.
+    Calculations need to make the data ready for entry_price.
+    '''
+    @abstractmethod
+    def pe_ce_indicators(self):
+        pass
+    
 class Strategy(ABC):
 
     @abstractmethod

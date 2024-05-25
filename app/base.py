@@ -87,8 +87,6 @@ class trade:
         l = data['low'].tail(1)
         global entry_price,target_price, exit_price
         
-    
-        
         print(self.sym,a,b,c)
         if a>b<c:
             self.entry_price = round_to_nearest_0_05(float(h.values))
@@ -162,9 +160,6 @@ def channel_img(img):
     i_url = img
     x = requests.post(is_url+i_url)
 
-
-
-
 def s_fetch_data(sym, token,trend):
     sym_fut = sym + "24APRFUT"
     s1 = s_get_hist(sym,token,'NSE',30) # 30 days 
@@ -190,7 +185,6 @@ def s_fetch_data(sym, token,trend):
     b_temp = float(s1.iloc[-2]["close"])
     temp = (a_temp/b_temp)*100
     #temp = [float((s1.iloc[-1]["open"]) - float(s1.iloc[-2]["close"])) / float(s1.iloc[-2]["close"])] * 100
-    
     target_row = s2[s2.index.time == target_time]     
     op_price = target_row.iloc[-1]['open']
     high = target_row.iloc[-1]['high']
@@ -199,12 +193,8 @@ def s_fetch_data(sym, token,trend):
     selected = False
     if (trend == 1) and (t_s2_bbtop < op_price ) and (close>op_price) :
         selected = True
-    
     if (trend == 2) and (op_price < t_s2_bbbot) and (close<op_price) :
         selected = True
-                
-        
-        
     return {
         "sym": sym,
         "open": op_price, #s1.iloc[-1]["open"],
@@ -264,54 +254,6 @@ def scan1(token):
     top_upside.to_csv("top_upside.csv")
     top_downside.to_csv("top_downside.csv")
     return top_upside, top_downside
-
-def fetch_data(tv, sym, trend):
-    try:
-        s1 = tv.get_hist(sym, "NSE", Interval.in_daily, n_bars=100, fut_contract=1)
-        s2 = tv.get_hist(sym, "NSE", Interval.in_15_minute, n_bars=100, fut_contract=1)
-    except Exception as e:
-        print("An error occurred:", str(e))
-        return None
-    print(s1,s2)
-    t_temp = bb(s1['close'], 20, 2)
-    t_s1_bbtop = t_temp.bollinger_hband()[-1]
-    t_s1_bbbot = t_temp.bollinger_lband()[-1]
-    t_temp = bb(s1['close'], 20, 0.7)
-    t_s2_bbtop = t_temp.bollinger_hband()[-1]
-    t_s2_bbbot = t_temp.bollinger_lband()[-1]
-    target_time = pd.to_datetime("09:15:00").time()
-    temp = ((s1.iloc[-1]["open"] - s1.iloc[-2]["close"]) / s1.iloc[-2]["close"]) * 100
-    target_row = s2[s2.index.time == target_time]     
-    op_price = target_row.iloc[-1]['open']
-    high = target_row.iloc[-1]['high']
-    low = target_row.iloc[-1]['low']
-    close = target_row.iloc[-1]['close']
-    selected = False
-    if (trend == 1) and (t_s2_bbtop < op_price ) and (close>op_price) :
-        selected = True
-    
-    if (trend == 2) and (op_price < t_s2_bbbot) and (close<op_price) :
-            selected = True
-                
-        
-        
-    return {
-        "sym": sym,
-        "open": op_price, #s1.iloc[-1]["open"],
-        "High": high,
-        "Low" : low,
-        "15-Min Close" : close,
-        "prev_close": s1.iloc[-2]["close"],
-        "bbtop1": t_s1_bbtop,
-        "bbtop2": t_s2_bbtop,
-        "bbbottom1": t_s1_bbbot,
-        "bbbottom2": t_s2_bbbot,
-        "op_pc_perc": temp,
-        "Selected" : selected,
-        "trend_direction": "Upside" if trend == 1 else "Downside"
-    }
-
-
     
 def filter1(l1,l2,token):
     df_up=[]

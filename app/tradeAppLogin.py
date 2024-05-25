@@ -67,5 +67,5 @@ if __name__ == '__main__':
                       password = samco_settings.SAMCO_PASSWORD,
                       yob = samco_settings.SAMCO_YOB)
     samco = SamcoSession(samco_body)
-    print(samco.session.get_quote('INFY'))
+    print(samco.is_authenticated())
     

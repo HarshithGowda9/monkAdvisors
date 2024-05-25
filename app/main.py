@@ -1,10 +1,11 @@
 import time
+import pandas as pd
 from tradeAppLogin import SamcoSession
 from config import get_samco_settings
 from tradeAppData import SamcoTradeDataExtraction
 from sessions import samco_session
 from utils import EarliestMonth
-from strategy.shortGainStrategy import ShortGainStrategy, shotGainScanner
+from strategy.shortGainStrategy import ShortGainStrategy, ShortGainScanner, ShortGainCalculation
 
 if __name__ == '__main__':
     # define the session
@@ -14,6 +15,15 @@ if __name__ == '__main__':
     earliest_month = EarliestMonth(samco_session)
     earliest_month = earliest_month.earliest_month
 
-    # Initiate shortGainStrategy
-    shot_gain_scanner = shotGainScanner(samco_session, earliest_month)
-    shot_gain_scanner.strategy_scanner()
+    # Initiate ShortGainScanner
+    short_gain_scanner = ShortGainScanner(samco_session, earliest_month)
+    # if short_gain_scanner.performed == False:
+    #     short_gain_scanner.strategy_scanner()
+
+    # Extract the symbol from top_upside and top_downside
+    short_gain_calculation = ShortGainCalculation(samco_session, short_gain_scanner, earliest_month)
+    upside, downside = short_gain_calculation.set_upside_and_downside_bool_flags()
+    print(upside)
+    print(downside)
+    # Initiate ShortGainStrategy
+    # shot_gain_strategy = ShortGainStrategy()
