@@ -7,7 +7,7 @@ from datetime import datetime
 from collections import defaultdict
 from pydantic import BaseModel, field_validator
 from utils import download_fno_symbols
-from ta.volatility import BollingerBands as bb 
+#from ta.volatility import BollingerBands as bb 
 from sessions import samco_session
 from config import get_paths
 from tradeAppData import SamcoTradeDataExtraction
@@ -128,8 +128,8 @@ class ShortGainCalculation(Calculation):
                               data:pd.DataFrame, 
                               window_size:int, 
                               band_width:int):
-        days_data_bb = bb(data['close'], window = window_size, window_dev = band_width)
-        return days_data_bb
+        #days_data_bb = bb(data['close'], window = window_size, window_dev = band_width)
+        return #days_data_bb
     
     def __select_the_upper_and_lower_band(self, data:pd.DataFrame):
         bb_top = data.bollinger_hband().iloc[-1]
