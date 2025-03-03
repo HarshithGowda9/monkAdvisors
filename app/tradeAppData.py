@@ -252,7 +252,8 @@ class TradingViewDataExtraction(TradeDataExtracion):
             
             # Load asset price data
             symbol = self.symbol
-            price_data = load_asset_price(symbol, 200, "1", timezone)
+            timeframe = '5'                    # 5 minute candles      
+            price_data = load_asset_price(symbol, 200, timeframe, timezone)
             
             # Remove the last row (possibly incomplete data)
             price_data = price_data.iloc[:-1]

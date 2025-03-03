@@ -19,10 +19,11 @@ def get_tv_data(symbol):
     return trading_session, tv_data
 
 class MACDStrategy():
-    def __init__(self, symbol, trading_session, tv_data):
+    def __init__(self, symbol, trading_session, tv_data, alpha: float = 0.002):
         self.symbol = symbol
         self.trading_session = trading_session
         self.tv_data = tv_data
+        self.aplha = alpha # Factor to determine the target price and stop loss. Default is 0.002 (0.2 % change)
         self.entry_price = 0.00
         self.Target_price = 0.00
         self.Stop_loss = 0.00
@@ -63,6 +64,31 @@ class MACDStrategy():
 
     def cross_below(self, prev, ltp, trigger):
         return (trigger > prev) and (trigger < ltp)
+    
+    def calc_target_stoploss(self, price: float, direction: str):
+        '''
+           Calculates the target price and stop loss based on price and direction.
+        
+           Args: 
+                price (float): The current market price.
+                Direction (str): 'Buy' for a buy position
+                                 'Sell' for a sell position
+
+            Returns: 
+                    tuple: (Target_price, Stop_loss)
+        
+        '''
+        try:    
+            if direction == 'Buy':
+                self.Target_price = round(price * (1 + self.alpha), 2)
+                self.Stop_loss = round(price * (1 - self.alpha), 2)
+
+            elif direction == 'Sell':
+                self.Target_price = round(price * (1 - self.alpha), 2)
+                self.Stop_loss = round(price * (1 + self.alpha), 2)
+        except Exception as e:
+            print(f"Error in calc_target_stoploss: {e}")
+                
 
     def run_strategy(self):
         while True:
@@ -78,8 +104,7 @@ class MACDStrategy():
                     if self.tv_data.dir == "Buy" and self.cross_above(self.prev_price, price, self.tv_data.ep):
                         self.pos_status = "Open"
                         self.entry_price = price
-                        self.Target_price = round(price * 1.002, 2)
-                        self.Stop_loss = round(price * 0.998, 2)
+                        self.calc_target_stoploss(price, self.tv_data.dir)
                         self.trade_pos = "Buy"
                         msg = f"Position of Buy Taken at {price}, Target: {self.Target_price}, Stop Loss: {self.Stop_loss}"
                         send_telegram_message(msg)
@@ -89,8 +114,7 @@ class MACDStrategy():
                     if self.tv_data.dir == "Sell" and self.cross_below(self.prev_price, price, self.tv_data.ep):
                         self.pos_status = "Open"
                         self.entry_price = price
-                        self.Target_price = round(price * 0.998, 2)
-                        self.Stop_loss = round(price * 1.002, 2)
+                        self.calc_target_stoploss(price, self.tv_data.dir)
                         self.trade_pos = "Sell"
                         msg = f"Position of Sell Taken at {price}, Target: {self.Target_price}, Stop Loss: {self.Stop_loss}"
                         send_telegram_message(msg)

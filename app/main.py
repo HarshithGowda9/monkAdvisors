@@ -31,7 +31,15 @@ if __name__ == '__main__':
     # shot_gain_strategy = ShortGainStrategy()
 
     # define the session
-    trading_session, tv_data = get_tv_data(symbol='NSE:TCS')
 
-    MACD_Strategy = MACDStrategy('NSE:TCS', trading_session, tv_data)
+    def get_symbol_name(symbol: str) -> str:
+        return f"{symbol}1!"
+    
+    symbol = "NSE:TCS"
+
+    futures_symbol = get_symbol_name(symbol)
+
+    trading_session, tv_data = get_tv_data(futures_symbol)
+
+    MACD_Strategy = MACDStrategy(futures_symbol, trading_session, tv_data, alpha = 0.003)
     MACD_Strategy.run_strategy()

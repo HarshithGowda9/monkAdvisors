@@ -152,8 +152,9 @@ def current_epoch_time():
 async def telegam_msg(msg):
 
     # Telegram Configuration
-    TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-    TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID"
+
+    TELEGRAM_BOT_TOKEN = '6826962569:AAEVHzPQnNXNuBB0mGcCiaDzLMARvk79Cpc'
+    TELEGRAM_CHAT_ID = '-1002138820012'
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
 
